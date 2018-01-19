@@ -1,6 +1,6 @@
 # Fluxion by Mr. SAGE
 
-<p align="center"><img src="https://github.com/thehackingsage/Fluxion/logos/Logo.png?raw=true" /></p>
+<p align="center"><img src="https://github.com/thehackingsage/Fluxion/blob/master/logos/Logo.png?raw=true" /></p>
 
 "Fluxion is the Future of MITM WPA Attacks" It is a remake by Mr. SAGE with less bugs and more functionality. It's compatible with the latest release of Kali (rolling). The attack is mostly manual, but experimental versions will automatically handle most functionality from the stable releases.
 
