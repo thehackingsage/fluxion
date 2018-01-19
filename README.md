@@ -17,8 +17,7 @@
 * The attack will automatically terminate, as soon as a correct password is submitted..
 
 ## :white_check_mark: How To Install? & How To Use? :
-
-```https://www.youtube.com/watch?v=i6VN5C2qLK4``` (Tutorial in Hindi)
+Watch This Tutorial : [Click Here](https://www.youtube.com/watch?v=i6VN5C2qLK4) (Tutorial in Hindi)
 
 ## :scroll: Changelog :
 Fluxion gets weekly updates with new features, improvements and bugfixes.
