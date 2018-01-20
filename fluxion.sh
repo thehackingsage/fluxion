@@ -396,9 +396,9 @@ if [ $FLUX_DEBUG != 1 ]; then
         echo""
 
         sleep 0.1
-        echo -e $red"                     FLUXION "$white""$version" (rev. "$green "$revision"$white") "$yellow"modified by "$white" thehackingsage"
+        echo -e $red"                     FLUXION "$white""$version" (rev. "$green "$revision"$white") "$yellow"modified by "$white"Mr SAGE"
         sleep 0.1
-        echo -e $green "           Page:"$red"https://github.com/thehackingsage/fluxion  "$transparent
+        echo -e $green "           Page:"$red"https://github.com/thehackingsage/Fluxion  "$transparent
         sleep 0.1
         echo -n "                              Latest rev."
         tput civis
