@@ -2073,7 +2073,6 @@ while true; do
     if [ \$? -eq 0 ]; then
         echo dead_wc > $DUMP_PATH/spipe && NC=0
         sleep 300
-        > $DUMP_PATH/hostapd.log
         continue
     fi
 
@@ -2119,7 +2118,8 @@ function MyAttack {
         if [ $fakeapmode = "hostapd" ]; then
                 killall hostapd &> $flux_output_device
                 sleep 0.5
-                hostapd -f $DUMP_PATH/hostapd.log $DUMP_PATH/hostapd.conf &
+                xterm $HOLD $BOTTOMRIGHT -bg "#000000" -fg "#FFFFFF" -title "AP" -e "hostapd  $DUMP_PATH/hostapd.conf |tee $DUMP_PATH/hostapd.log" &
+                
         elif [ $fakeapmode = "airbase-ng" ]; then
                 killall airbase-ng &> $flux_output_device
                 xterm $BOTTOMRIGHT -bg "#000000" -fg "#FFFFFF" -title "AP" -e airbase-ng -P -e $Host_SSID -c $Host_CHAN -a ${mac::13}$nomac${mac:14:4} $WIFI_MONITOR &
@@ -2169,7 +2169,6 @@ function monitor_wc {
 function attack {
         handshakecheck
         MyAttack
-        xterm $HOLD $BOTTOMRIGHT -bg "#000000" -fg "#FFFFFF" -title "AP" -e tail -f $DUMP_PATH/hostapd.log &
         xterm -hold $TOPRIGHT -title "Wifi Information" -e $DUMP_PATH/handcheck &
         gen_monitor
         xterm  -title "Monitor Channel" -e bash -i $DUMP_PATH/monitor_channel.sh  &
