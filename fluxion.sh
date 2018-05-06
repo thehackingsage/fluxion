@@ -2145,14 +2145,6 @@ function MyAttack {
         mknod $DUMP_PATH/spipe p  2>/dev/null
 }
 
-function MySetInterface {
-        killIF
-        selectIF
-        if [ $(echo "$PREWIFI" | wc -m) -le 3 ]; then
-               MySetInterface 
-        fi
-        initIF
-}
 #monitor WireLessCard
 function monitor_wc {
     while grep dead_wc $DUMP_PATH/spipe >/dev/null; do
@@ -2160,7 +2152,9 @@ function monitor_wc {
         KEEP_DUMP=1
         (exitmode >/dev/null)
         KEEP_DUMP=$OKD
-        MySetInterface
+        killIF
+        selectIF
+        initIF
         MyAttack
     done
 }
