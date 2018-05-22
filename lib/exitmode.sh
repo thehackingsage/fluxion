@@ -70,7 +70,7 @@ function exitmode {
         echo -e ""$white"["$red"-"$white"] "$white"$general_exitmode_5"$transparent""
         tput cnorm
 
-        if [ $FLUX_DEBUG != 1 ]; then
+        if [ $FLUX_DEBUG != 1 ] && [ $KEEP_DUMP != 1 ]; then
 
             echo -e ""$white"["$red"-"$white"] "$white"Delete "$grey"files"$transparent""
             rm -R $DUMP_PATH/* &>$flux_output_device
